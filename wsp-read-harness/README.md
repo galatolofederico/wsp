@@ -60,7 +60,7 @@ For policy checkpoints, `--description-file` prepends a neutral release
 description: observation, action and network interface, but no task name. This
 mirrors the setup in the paper and prevents the model from misreading a
 multi-head actor-critic as a single sequential classifier.
-`descriptions/policy_4d_2a.txt` matches the anonymized CartPole/Flappy pair.
+`descriptions/policy_4d_2a.txt` matches the anonymized four-task checkpoint set.
 The prompt also states PyTorch's `[out_features, in_features]` weight layout
 and requires a final `Task:` line.
 
@@ -72,15 +72,17 @@ that lets the model inspect tensors with tools.
 checkpoint path, thinking settings, the full messages sent, the accumulated
 reasoning, the final answer, and token usage when the endpoint reports it.
 
-## Two-task blind comparison
+## Four-task blind comparison
 
-`../anonymous/` contains two anonymized checkpoints with identical tensor
+`../anonymous/` contains four anonymized checkpoints with identical tensor
 names, shapes and file size:
 
 - `policy.safetensors` — trained on CartPole
 - `policy_flappy.safetensors` — trained on the 4-D / 2-action Flappy task
+- `policy_ballbeam.safetensors` — trained on BallBeam
+- `policy_catch.safetensors` — trained on Catch
 
-Run the harness on both with the same prompt and options. Because the
+Run the harness on each with the same prompt and options. Because the
 architecture and header are identical, the model must distinguish the tasks
 from the weight values alone. Do not pass `--metadata`, and do not include the
 `*_mapping.json` files in the prompt.
