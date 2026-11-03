@@ -1,0 +1,23 @@
+{
+  "input": "cartpole_ppo.safetensors",
+  "output": "../anonymous/policy.safetensors",
+  "removed_metadata": {
+    "timesteps": "61440",
+    "eval_return": "489.1",
+    "obs_dim": "4",
+    "hidden": "256,192",
+    "parameters": "51203",
+    "n_actions": "2",
+    "format": "cartpole-ppo"
+  },
+  "tensor_map": {
+    "critic.bias": "tensor_00",
+    "actor.bias": "tensor_01",
+    "critic.weight": "tensor_02",
+    "trunk.2.bias": "tensor_03",
+    "trunk.0.bias": "tensor_04",
+    "actor.weight": "tensor_05",
+    "trunk.0.weight": "tensor_06",
+    "trunk.2.weight": "tensor_07"
+  }
+}
