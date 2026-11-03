@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Load a trained CartPole or Flappy PPO policy and watch it run.
+"""Load a trained 4-D / 2-action PPO policy and watch it run.
 
 Examples:
     python eval.py                          # 5 episodes, 1x speed
@@ -7,6 +7,8 @@ Examples:
     python eval.py --episodes 20 --speed 2  # 20 episodes at 2x speed
     python eval.py --headless --episodes 50 # no window, just print returns
     python eval.py --env flappy             # evaluate the Flappy checkpoint
+    python eval.py --env ballbeam           # evaluate the ball-beam checkpoint
+    python eval.py --env catch              # evaluate the catch checkpoint
 """
 
 from __future__ import annotations
@@ -17,7 +19,9 @@ from pathlib import Path
 
 import torch
 
+from ballbeam import BallBeamEnv, BallBeamViewer
 from cartpole import CartPoleEnv, CartPoleViewer
+from catch import CatchEnv, CatchViewer
 from flappy import FlappyEnv, FlappyViewer
 from model import load_model
 
@@ -29,6 +33,12 @@ ENVS = {
     ),
     "flappy": (
         FlappyEnv, FlappyViewer, "crashed - resetting", "Flappy"
+    ),
+    "ballbeam": (
+        BallBeamEnv, BallBeamViewer, "ball fell off - resetting", "BallBeam"
+    ),
+    "catch": (
+        CatchEnv, CatchViewer, "missed - resetting", "Catch"
     ),
 }
 

@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Train a tiny PPO agent on CartPole or Flappy and save the network.
+"""Train a tiny PPO agent on a 4-D / 2-action task and save the network.
 
 Examples:
     python train.py                      # trains CartPole until solved (or 400k steps)
     python train.py --timesteps 200000   # shorter budget
-    python train.py --env flappy         # second 4-D / 2-action task
+    python train.py --env flappy         # Flappy gate navigation
+    python train.py --env ballbeam       # ball-beam balancing
+    python train.py --env catch          # falling-ball catching
 """
 
 from __future__ import annotations
@@ -18,7 +20,9 @@ import torch
 from torch.nn.utils import clip_grad_norm_
 from torch.optim import Adam
 
+from ballbeam import BallBeamVec
 from cartpole import CartPoleVec
+from catch import CatchVec
 from flappy import FlappyVec
 from model import ActorCritic, count_parameters, save_model
 
@@ -27,6 +31,8 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 ENVS = {
     "cartpole": CartPoleVec,
     "flappy": FlappyVec,
+    "ballbeam": BallBeamVec,
+    "catch": CatchVec,
 }
 
 
