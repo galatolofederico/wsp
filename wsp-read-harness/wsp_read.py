@@ -114,6 +114,22 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument("--max-tokens", type=int, default=None)
     p.add_argument("--temperature", type=float, default=None)
+    p.add_argument(
+        "--reasoning-effort",
+        "--thinking-effort",
+        dest="reasoning_effort",
+        default=None,
+        help="provider-specific thinking effort, sent as top-level "
+             "reasoning_effort (DeepSeek: low, high, max; also accepts "
+             "minimal, medium, xhigh, none)",
+    )
+    p.add_argument(
+        "--thinking",
+        choices=("enabled", "disabled"),
+        default=None,
+        help="DeepSeek thinking-mode toggle, sent as thinking.type "
+             "(omitted by default)",
+    )
     p.add_argument("--timeout", type=float, default=600.0)
     return p.parse_args()
 
@@ -476,6 +492,10 @@ def ask_llm(
         payload["max_tokens"] = args.max_tokens
     if args.temperature is not None:
         payload["temperature"] = args.temperature
+    if args.reasoning_effort is not None:
+        payload["reasoning_effort"] = args.reasoning_effort
+    if args.thinking is not None:
+        payload["thinking"] = {"type": args.thinking}
 
     headers = {
         "Content-Type": "application/json",
@@ -571,6 +591,8 @@ def main() -> None:
             ],
             "reasoning": printer.reasoning_text,
             "output": printer.answer_text,
+            "reasoning_effort": args.reasoning_effort,
+            "thinking": args.thinking,
             "usage": usage,
         }
         try:

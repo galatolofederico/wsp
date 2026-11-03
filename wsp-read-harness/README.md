@@ -43,10 +43,18 @@ Useful options:
 --max-chars 400000   # truncate the weight text for smaller contexts
 --metadata           # also send the safetensors metadata (may give the answer away)
 --description-file descriptions/policy_4d_2a.txt  # neutral task/interface description
+--reasoning-effort high  # thinking effort (alias: --thinking-effort)
+--thinking disabled      # DeepSeek thinking-mode toggle
 --save run.json      # save the full input, reasoning and answer as JSON
 --max-tokens 2048
 --temperature 0
 ```
+
+For DeepSeek V4, `--reasoning-effort` is sent as the top-level
+`reasoning_effort` field (`low`, `high`, `max`; compatibility values such as
+`medium` and `xhigh` are also accepted). `--thinking` maps to
+`thinking.type`. Thinking is enabled by default at high effort, and
+`temperature` has no effect while it is enabled.
 
 For policy checkpoints, `--description-file` prepends a neutral release
 description: observation, action and network interface, but no task name. This
@@ -61,8 +69,8 @@ Either raise `--max-chars` to whatever the model supports, or use a harness
 that lets the model inspect tensors with tools.
 
 `--save` writes a JSON object containing the endpoint and model names, the
-checkpoint path, the full messages sent, the accumulated reasoning, the final
-answer, and token usage when the endpoint reports it.
+checkpoint path, thinking settings, the full messages sent, the accumulated
+reasoning, the final answer, and token usage when the endpoint reports it.
 
 ## Two-task blind comparison
 
