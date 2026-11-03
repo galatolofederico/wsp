@@ -498,7 +498,7 @@ def main() -> None:
 
     print(
         f"Prompt: {len(prompt):,} chars "
-        f"({summary.splitlines()[1]}, {summary.splitlines()[2]})",
+        f"({', '.join(summary.splitlines()[:2])})",
         file=sys.stderr,
     )
     if len(prompt) > 1_000_000:
