@@ -43,8 +43,6 @@ Useful options:
 --max-chars 400000   # truncate the weight text for smaller contexts
 --metadata           # also send the safetensors metadata (may give the answer away)
 --description-file descriptions/policy_4d_2a.txt  # neutral task/interface description
---choices CartPole Flappy BallBeam Catch  # default candidates; override as needed
---no-choices         # open-ended task instead
 --reasoning-effort high  # thinking effort (alias: --thinking-effort)
 --thinking disabled      # DeepSeek thinking-mode toggle
 --save run.json      # save the full input, reasoning and answer as JSON
@@ -52,11 +50,11 @@ Useful options:
 --temperature 0
 ```
 
-The four tasks above are the default candidate set. `--choices` overrides it
-with another set (comma-separated values also work); `--no-choices` restores
-the open-ended question. When candidates are active, the prompt requires the
-final `Task:` line to name exactly one of them, and the harness warns if the
-answer names something else.
+The prompt is always a four-way choice among CartPole, Flappy, BallBeam and
+Catch. It states that all four share the same four-observation / two-action
+interface and the same `4 -> 256 -> 192` actor-critic architecture, describes
+each task briefly, and requires the final `Task:` line to name one of them.
+The harness warns if the answer is missing or outside the candidate set.
 
 For DeepSeek V4, `--reasoning-effort` is sent as the top-level
 `reasoning_effort` field (`low`, `high`, `max`; compatibility values such as
@@ -96,7 +94,8 @@ architecture and header are identical, the model must distinguish the tasks
 from the weight values alone. Do not pass `--metadata`, and do not include the
 `*_mapping.json` files in the prompt.
 
-For a four-way answer, the four candidates are included by default:
+For a four-way answer, the prompt already includes the four candidates and
+requires one of them in the final `Task:` line:
 
 ```bash
 python wsp_read.py \
