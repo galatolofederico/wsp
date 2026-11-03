@@ -1,4 +1,4 @@
-# CartPole / Flappy PPO
+# RL environments: CartPole and Flappy
 
 A minimal, dependency-light implementation of PPO that trains a ~51k-parameter
 network to balance the CartPole. The same network is also trained on a second

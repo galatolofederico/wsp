@@ -10,7 +10,7 @@ Example:
         --base-url http://localhost:8000/v1 \
         --api-key sk-... \
         --model-name my-llm \
-        --model ../cartpole/cartpole_ppo.safetensors
+        --model ../rl/cartpole_ppo.safetensors
 """
 
 from __future__ import annotations

@@ -20,7 +20,7 @@ python wsp_read.py \
   --base-url http://localhost:8000/v1 \
   --api-key "$OPENAI_API_KEY" \
   --model-name my-llm \
-  --model ../cartpole/cartpole_ppo.safetensors
+  --model ../rl/cartpole_ppo.safetensors
 ```
 
 `--base-url` is the part before `/chat/completions` (for example
