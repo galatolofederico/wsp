@@ -1,0 +1,23 @@
+{
+  "input": "catch_ppo.safetensors",
+  "output": "../anonymous/policy_catch.safetensors",
+  "removed_metadata": {
+    "hidden": "256,192",
+    "n_actions": "2",
+    "obs_dim": "4",
+    "eval_return": "500.0",
+    "format": "catch-ppo",
+    "parameters": "51203",
+    "timesteps": "122880"
+  },
+  "tensor_map": {
+    "critic.bias": "tensor_00",
+    "actor.bias": "tensor_01",
+    "critic.weight": "tensor_02",
+    "trunk.2.bias": "tensor_03",
+    "trunk.0.bias": "tensor_04",
+    "actor.weight": "tensor_05",
+    "trunk.0.weight": "tensor_06",
+    "trunk.2.weight": "tensor_07"
+  }
+}

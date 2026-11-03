@@ -1,0 +1,23 @@
+{
+  "input": "ballbeam_ppo.safetensors",
+  "output": "../anonymous/policy_ballbeam.safetensors",
+  "removed_metadata": {
+    "eval_return": "500.0",
+    "timesteps": "20480",
+    "n_actions": "2",
+    "format": "ballbeam-ppo",
+    "parameters": "51203",
+    "hidden": "256,192",
+    "obs_dim": "4"
+  },
+  "tensor_map": {
+    "critic.bias": "tensor_00",
+    "actor.bias": "tensor_01",
+    "critic.weight": "tensor_02",
+    "trunk.2.bias": "tensor_03",
+    "trunk.0.bias": "tensor_04",
+    "actor.weight": "tensor_05",
+    "trunk.0.weight": "tensor_06",
+    "trunk.2.weight": "tensor_07"
+  }
+}
