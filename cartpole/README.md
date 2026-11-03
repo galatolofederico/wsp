@@ -51,6 +51,29 @@ Close the window to quit. For a quick no-window check:
 python eval.py --headless --episodes 50
 ```
 
+## Anonymized checkpoint (blind weight-space experiments)
+
+Safetensors files carry a JSON header with optional metadata, and that metadata
+is visible to anyone who opens the file. This checkpoint stores `format`,
+`obs_dim`, `n_actions`, `hidden`, `parameters`, `timesteps` and `eval_return`.
+
+Metadata is not needed for loading. To make a blind copy, also rename the
+semantic tensor keys (`actor`, `critic`, `trunk`):
+
+```bash
+python anonymize.py cartpole_ppo.safetensors ../anonymous/policy.safetensors \
+    --mapping ../anonymous/policy_mapping.json
+```
+
+This writes a copy with no `__metadata__` block and neutral tensor names.
+The mapping file contains the original names — keep it out of any prompt sent
+to the model being tested. Use `--keep-names` to strip metadata but preserve
+tensor names (that copy stays loadable by `eval.py`).
+
+Note that even a fully anonymized file still reveals the architecture from its
+shapes (`4 -> 256 -> 192`, two heads of size 2 and 1), and its weights may
+still reveal the task. Only the explicit labels are removed.
+
 ## Files
 
 | File | Purpose |
@@ -59,3 +82,4 @@ python eval.py --headless --episodes 50
 | `model.py` | Actor-critic MLP and safetensors save/load helpers |
 | `train.py` | PPO training loop |
 | `eval.py` | Loads the checkpoint and renders episodes |
+| `anonymize.py` | Strips safetensors metadata and/or renames tensors |
