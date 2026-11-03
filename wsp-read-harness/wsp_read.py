@@ -24,6 +24,7 @@ import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
+from typing import TextIO
 
 from safetensors import safe_open
 
@@ -216,14 +217,217 @@ def chat_url(base_url: str) -> str:
     return url + "/chat/completions"
 
 
-def ask_llm(args: argparse.Namespace, prompt: str) -> dict:
+def _text_from(value) -> str:
+    """Extract text from a string or an OpenAI-style content-part list."""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        parts: list[str] = []
+        for item in value:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict):
+                for key in ("text", "summary", "content"):
+                    text = item.get(key)
+                    if isinstance(text, str):
+                        parts.append(text)
+                        break
+        return "".join(parts)
+    return ""
+
+
+def _reasoning_from(message: dict) -> str:
+    """Read whichever reasoning field the endpoint decided to use."""
+    if not isinstance(message, dict):
+        return ""
+    for key in ("reasoning_content", "reasoning"):
+        text = _text_from(message.get(key))
+        if text:
+            return text
+    return _text_from(message.get("reasoning_details"))
+
+
+class StreamPrinter:
+    """Print reasoning and answer chunks as they arrive, keeping newlines."""
+
+    HEADER = "\x1b[1;36m"
+    DIM = "\x1b[2m"
+    RESET = "\x1b[0m"
+
+    def __init__(self, stream: TextIO | None = None, color: bool | None = None):
+        self.stream = stream if stream is not None else sys.stdout
+        if color is None:
+            color = self.stream.isatty() and "NO_COLOR" not in os.environ
+        self.color = color
+        self._style = ""
+        self._at_line_start = True
+        self._anything = False
+        self._reasoning = False
+        self._answer = False
+
+    def _set_style(self, style: str) -> None:
+        if not self.color or style == self._style:
+            return
+        self.stream.write(self.RESET if style == "" else style)
+        self._style = style
+
+    def _newline(self) -> None:
+        if not self._at_line_start:
+            self.stream.write("\n")
+            self._at_line_start = True
+
+    def _header(self, label: str) -> None:
+        self._set_style("")
+        self._newline()
+        if self._anything:
+            self.stream.write("\n")
+        if self.color:
+            self.stream.write(f"{self.HEADER}{label}{self.RESET}\n")
+        else:
+            self.stream.write(f"{label}\n")
+        self.stream.flush()
+        self._at_line_start = True
+        self._anything = True
+
+    def _write(self, text: str) -> None:
+        self.stream.write(text)
+        self.stream.flush()
+        self._at_line_start = text.endswith("\n")
+        self._anything = True
+
+    def reasoning(self, text: str) -> None:
+        if not text:
+            return
+        if not self._reasoning:
+            self._header("Reasoning")
+            self._reasoning = True
+        self._set_style(self.DIM)
+        self._write(text)
+
+    def answer(self, text: str) -> None:
+        if not text:
+            return
+        if not self._answer:
+            self._header("Answer")
+            self._answer = True
+        self._set_style("")
+        self._write(text)
+
+    def finish(self) -> None:
+        self._set_style("")
+        self._newline()
+        self.stream.flush()
+
+
+def _iter_sse(response):
+    """Yield the data payload of each server-sent event."""
+    data_lines: list[str] = []
+    for raw_line in response:
+        line = raw_line.decode("utf-8", "replace").rstrip("\r\n")
+        if not line:
+            if data_lines:
+                yield "\n".join(data_lines)
+                data_lines.clear()
+            continue
+        if line.startswith(":"):
+            continue
+        field, _, value = line.partition(":")
+        if field == "data":
+            data_lines.append(value[1:] if value.startswith(" ") else value)
+    if data_lines:
+        yield "\n".join(data_lines)
+
+
+def _consume_full(body: str, printer: StreamPrinter) -> dict | None:
+    try:
+        data = json.loads(body)
+    except json.JSONDecodeError:
+        raise SystemExit(f"API returned non-JSON:\n{body[:4000]}")
+
+    if isinstance(data, dict) and data.get("error"):
+        raise SystemExit(
+            "API error:\n" + json.dumps(data["error"], indent=2)[:4000]
+        )
+
+    try:
+        message = data["choices"][0]["message"]
+    except (KeyError, IndexError, TypeError):
+        raise SystemExit(
+            "Unexpected API response:\n" + json.dumps(data, indent=2)[:4000]
+        )
+    if not isinstance(message, dict):
+        raise SystemExit(
+            "Unexpected API response:\n" + json.dumps(data, indent=2)[:4000]
+        )
+
+    reasoning = _reasoning_from(message)
+    content = _text_from(message.get("content"))
+    if reasoning:
+        printer.reasoning(reasoning)
+    if content:
+        printer.answer(content)
+    if not reasoning and not content:
+        raise SystemExit("The API returned an empty message.")
+
+    return data.get("usage")
+
+
+def _consume_stream(response, printer: StreamPrinter) -> dict | None:
+    usage: dict | None = None
+    saw_text = False
+
+    for payload in _iter_sse(response):
+        if payload.strip() == "[DONE]":
+            break
+
+        try:
+            event = json.loads(payload)
+        except json.JSONDecodeError:
+            raise SystemExit(f"Invalid stream event:\n{payload[:4000]}")
+
+        if isinstance(event, dict) and event.get("error"):
+            raise SystemExit(
+                "API error:\n" + json.dumps(event["error"], indent=2)[:4000]
+            )
+        if not isinstance(event, dict):
+            continue
+
+        if event.get("usage"):
+            usage = event["usage"]
+
+        choices = event.get("choices")
+        if not isinstance(choices, list):
+            continue
+        for choice in choices:
+            if not isinstance(choice, dict):
+                continue
+            delta = choice.get("delta") or {}
+            if not isinstance(delta, dict):
+                continue
+            reasoning = _reasoning_from(delta)
+            content = _text_from(delta.get("content"))
+            if reasoning:
+                printer.reasoning(reasoning)
+                saw_text = True
+            if content:
+                printer.answer(content)
+                saw_text = True
+
+    if not saw_text:
+        raise SystemExit("The API returned an empty response.")
+    return usage
+
+
+def ask_llm(
+    args: argparse.Namespace, prompt: str, printer: StreamPrinter
+) -> dict | None:
     payload: dict = {
         "model": args.model_name,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": prompt},
         ],
-        "stream": False,
+        "stream": True,
     }
     if args.max_tokens is not None:
         payload["max_tokens"] = args.max_tokens
@@ -247,17 +451,16 @@ def ask_llm(args: argparse.Namespace, prompt: str) -> dict:
 
     try:
         with urllib.request.urlopen(request, timeout=args.timeout) as response:
-            body = response.read().decode("utf-8", "replace")
+            content_type = response.headers.get_content_type()
+            if content_type == "application/json" or content_type.endswith("+json"):
+                body = response.read().decode("utf-8", "replace")
+                return _consume_full(body, printer)
+            return _consume_stream(response, printer)
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", "replace")
         raise SystemExit(f"API request failed ({exc.code}):\n{detail[:4000]}")
     except urllib.error.URLError as exc:
         raise SystemExit(f"Could not reach {url}: {exc.reason}")
-
-    try:
-        return json.loads(body)
-    except json.JSONDecodeError:
-        raise SystemExit(f"API returned non-JSON:\n{body[:4000]}")
 
 
 def main() -> None:
@@ -285,28 +488,12 @@ def main() -> None:
             file=sys.stderr,
         )
 
-    response = ask_llm(args, prompt)
-
+    printer = StreamPrinter()
     try:
-        message = response["choices"][0]["message"]
-    except (KeyError, IndexError, TypeError):
-        raise SystemExit(
-            "Unexpected API response:\n" + json.dumps(response, indent=2)[:4000]
-        )
+        usage = ask_llm(args, prompt, printer)
+    finally:
+        printer.finish()
 
-    content = message.get("content") or ""
-    if isinstance(content, list):
-        content = "".join(
-            part.get("text", "") for part in content if isinstance(part, dict)
-        )
-    if not content:
-        content = message.get("reasoning_content") or ""
-    if not content:
-        raise SystemExit("The API returned an empty message.")
-
-    print(content)
-
-    usage = response.get("usage")
     if usage:
         print(
             f"\n[tokens: prompt={usage.get('prompt_tokens', '?')}, "

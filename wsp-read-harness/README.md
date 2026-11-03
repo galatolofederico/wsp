@@ -31,6 +31,12 @@ as-is. `--api-key` may be omitted for local servers; it defaults to
 The prompt contains the tensor names, shapes, dtype, basic statistics and all
 weight values, so the LLM can reason about the network without running it.
 
+Responses are streamed as server-sent events. Reasoning is printed under a
+`Reasoning` heading (dimmed when stdout is a terminal), then the reply under
+`Answer`; newlines are preserved. ANSI styling is disabled automatically when
+output is piped or `NO_COLOR` is set. If the endpoint ignores streaming and
+returns a normal JSON response, that is handled too.
+
 Useful options:
 
 ```bash
