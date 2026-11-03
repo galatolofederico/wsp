@@ -54,3 +54,16 @@ that lets the model inspect tensors with tools.
 `--save` writes a JSON object containing the endpoint and model names, the
 checkpoint path, the full messages sent, the accumulated reasoning, the final
 answer, and token usage when the endpoint reports it.
+
+## Two-task blind comparison
+
+`../anonymous/` contains two anonymized checkpoints with identical tensor
+names, shapes and file size:
+
+- `policy.safetensors` — trained on CartPole
+- `policy_flappy.safetensors` — trained on the 4-D / 2-action Flappy task
+
+Run the harness on both with the same prompt and options. Because the
+architecture and header are identical, the model must distinguish the tasks
+from the weight values alone. Do not pass `--metadata`, and do not include the
+`*_mapping.json` files in the prompt.
