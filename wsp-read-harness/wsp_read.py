@@ -194,7 +194,6 @@ def build_checkpoint(path: Path, max_chars: int, include_metadata: bool):
             used += len(section) + 2
 
     summary_lines = [
-        f"file: {path}",
         f"tensors: {len(keys)}",
         f"parameters: {total_params:,}",
     ]
