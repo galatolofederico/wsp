@@ -168,8 +168,9 @@ def run_viewer(
         else:
             status = state["last_status"]
 
+        # Viewers expect raw simulator state; observations may be normalized.
         viewer.draw(
-            state["obs"],
+            env.state,
             episode=state["episode"] + 1,
             steps=state["steps"],
             episode_return=state["episode_return"],
