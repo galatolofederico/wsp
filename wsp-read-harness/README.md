@@ -42,10 +42,19 @@ Useful options:
 ```bash
 --max-chars 400000   # truncate the weight text for smaller contexts
 --metadata           # also send the safetensors metadata (may give the answer away)
+--description-file descriptions/policy_4d_2a.txt  # neutral task/interface description
 --save run.json      # save the full input, reasoning and answer as JSON
 --max-tokens 2048
 --temperature 0
 ```
+
+For policy checkpoints, `--description-file` prepends a neutral release
+description: observation, action and network interface, but no task name. This
+mirrors the setup in the paper and prevents the model from misreading a
+multi-head actor-critic as a single sequential classifier.
+`descriptions/policy_4d_2a.txt` matches the anonymized CartPole/Flappy pair.
+The prompt also states PyTorch's `[out_features, in_features]` weight layout
+and requires a final `Task:` line.
 
 For large checkpoints the full weight dump will not fit in a context window.
 Either raise `--max-chars` to whatever the model supports, or use a harness

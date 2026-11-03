@@ -1,0 +1,17 @@
+THE OBSERVATION
+The policy receives four scalar observations per environment step. Their
+individual meanings are not given.
+
+THE ACTIONS
+The policy selects one of two discrete actions per step.
+
+THE NETWORK
+A PPO-trained actor-critic. A shared MLP trunk maps the observations through
+two tanh hidden layers with 256 and 192 units. A policy head emits two action
+logits, and a value head emits one scalar state value. PyTorch nn.Linear
+weights are stored as [out_features, in_features], with one bias entry per
+output. The checkpoint has 51,203 parameters in total.
+
+The task is a low-dimensional control problem. Identify the specific
+environment or control task from the weights. Do not assume the task from this
+description alone.

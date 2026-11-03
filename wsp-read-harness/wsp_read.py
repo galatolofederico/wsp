@@ -34,15 +34,34 @@ SYSTEM_PROMPT = (
 )
 
 USER_PROMPT = """\
-Below is a neural network checkpoint from a safetensors file, rendered as text.
-You cannot run the network. Use only the weights and the tensor names/shapes.
+Below is a PyTorch neural network checkpoint rendered as text. You cannot run
+the network. Use only the weights, tensor names, and shapes.
 
-Infer what this model was trained to do. Explain:
-1. the architecture and how data flows through it,
-2. the task or behavior the network implements,
-3. which tensors and weight patterns support your conclusion.
+Format facts:
+- nn.Linear weights are stored as [out_features, in_features], and biases as
+  [out_features].
+- Tensor order in the file is not necessarily forward-pass order.
+- The checkpoint may contain a shared trunk and multiple heads. Do not assume
+  every tensor belongs to one sequential stack.
+- A [1] bias paired with a [1, N] weight can be a scalar value head, not an
+  input normalization.
+- Hidden activations are not stored.
 
-Be concrete: cite tensor names, shapes, and standout values.
+Identify the specific problem this network solves, not just its architecture
+family. If it is a policy, name the concrete environment or task. Do not answer
+only "classifier", "regression", or "MLP".
+
+{description}Explain:
+1. the architecture and data flow, pairing each weight with the bias of the
+   layer it belongs to,
+2. the concrete task or behavior the network implements, including the
+   observations and actions if it is a policy,
+3. which tensor names, shapes, and standout values support your conclusion.
+
+Be concrete: cite the weights you rely on.
+End with exactly these two lines:
+Task: <specific task or environment>
+Confidence: <0-100>%
 
 {metadata}=== CHECKPOINT ===
 {summary}
@@ -79,6 +98,13 @@ def parse_args() -> argparse.Namespace:
         "--metadata",
         action="store_true",
         help="also send the safetensors metadata (may reveal the answer)",
+    )
+    p.add_argument(
+        "--description-file",
+        type=Path,
+        default=None,
+        help="optional neutral description of the environment and network to "
+             "prepend to the prompt (see descriptions/)",
     )
     p.add_argument(
         "--save",
@@ -488,12 +514,26 @@ def main() -> None:
     if args.save and args.save.resolve() == args.model.resolve():
         raise SystemExit("--save must not point to the input model")
 
+    description_text = ""
+    if args.description_file:
+        if not args.description_file.is_file():
+            raise SystemExit(f"No such file: {args.description_file}")
+        description = args.description_file.read_text(encoding="utf-8").strip()
+        if description:
+            description_text = (
+                "=== RELEASE DESCRIPTION ===\n"
+                f"{description}\n\n"
+            )
+
     print(f"Reading {args.model} ...", file=sys.stderr)
     summary, metadata_text, weights = build_checkpoint(
         args.model, args.max_chars, args.metadata
     )
     prompt = USER_PROMPT.format(
-        metadata=metadata_text, summary=summary, weights=weights
+        description=description_text,
+        metadata=metadata_text,
+        summary=summary,
+        weights=weights,
     )
 
     print(
