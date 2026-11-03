@@ -33,6 +33,8 @@ SYSTEM_PROMPT = (
     "interpretability. You can infer what a network does by reading its weights."
 )
 
+DEFAULT_CHOICES = ("CartPole", "Flappy", "BallBeam", "Catch")
+
 USER_PROMPT = """\
 Below is a PyTorch neural network checkpoint rendered as text. You cannot run
 the network. Use only the weights, tensor names, and shapes.
@@ -47,11 +49,9 @@ Format facts:
   input normalization.
 - Hidden activations are not stored.
 
-Identify the specific problem this network solves, not just its architecture
-family. If it is a policy, name the concrete environment or task. Do not answer
-only "classifier", "regression", or "MLP".
+{task_instruction}
 
-{description}Explain:
+{choices}{description}Explain:
 1. the architecture and data flow, pairing each weight with the bias of the
    layer it belongs to,
 2. the concrete task or behavior the network implements, including the
@@ -60,7 +60,7 @@ only "classifier", "regression", or "MLP".
 
 Be concrete: cite the weights you rely on.
 End with exactly these two lines:
-Task: <specific task or environment>
+{task_line}
 Confidence: <0-100>%
 
 {metadata}=== CHECKPOINT ===
@@ -105,6 +105,20 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="optional neutral description of the environment and network to "
              "prepend to the prompt (see descriptions/)",
+    )
+    choice_group = p.add_mutually_exclusive_group()
+    choice_group.add_argument(
+        "--choices",
+        nargs="+",
+        metavar="TASK",
+        default=DEFAULT_CHOICES,
+        help="candidate tasks; the model must answer with exactly one of them "
+             "(default: CartPole Flappy BallBeam Catch)",
+    )
+    choice_group.add_argument(
+        "--no-choices",
+        action="store_true",
+        help="ask for an open-ended task instead of the default candidates",
     )
     p.add_argument(
         "--save",
@@ -292,6 +306,17 @@ def _reasoning_from(message: dict) -> str:
         if text:
             return text
     return _text_from(message.get("reasoning_details"))
+
+
+def _task_from_answer(text: str) -> str | None:
+    """Extract the value from the final ``Task:`` line, if there is one."""
+    for line in reversed(text.splitlines()):
+        cleaned = line.strip().lstrip("- ").strip("*`_ ")
+        if cleaned.lower().startswith("task:"):
+            value = cleaned.split(":", 1)[1].strip().strip("*`_ ").strip()
+            if value:
+                return value
+    return None
 
 
 class StreamPrinter:
@@ -545,11 +570,44 @@ def main() -> None:
                 f"{description}\n\n"
             )
 
+    choices: list[str] = []
+    if args.choices and not args.no_choices:
+        for item in args.choices:
+            for part in item.split(","):
+                name = part.strip()
+                if name and name not in choices:
+                    choices.append(name)
+
+    if choices:
+        joined = ", ".join(choices)
+        task_instruction = (
+            "Identify which of the candidate tasks this network solves. "
+            "Choose exactly one candidate, and do not invent another name."
+        )
+        choices_text = (
+            "=== CANDIDATE TASKS ===\n"
+            + "\n".join(f"- {name}" for name in choices)
+            + "\n\n"
+        )
+        task_line = f"Task: <exactly one of: {joined}>"
+    else:
+        task_instruction = (
+            "Identify the specific problem this network solves, not just its "
+            "architecture family. If it is a policy, name the concrete "
+            'environment or task. Do not answer only "classifier", '
+            '"regression", or "MLP".'
+        )
+        choices_text = ""
+        task_line = "Task: <specific task or environment>"
+
     print(f"Reading {args.model} ...", file=sys.stderr)
     summary, metadata_text, weights = build_checkpoint(
         args.model, args.max_chars, args.metadata
     )
     prompt = USER_PROMPT.format(
+        task_instruction=task_instruction,
+        choices=choices_text,
+        task_line=task_line,
         description=description_text,
         metadata=metadata_text,
         summary=summary,
@@ -573,6 +631,22 @@ def main() -> None:
     finally:
         printer.finish()
 
+    chosen_task = _task_from_answer(printer.answer_text) if choices else None
+    if choices:
+        canonical = {name.lower(): name for name in choices}
+        if chosen_task is None:
+            print("warning: no Task: line found in the answer", file=sys.stderr)
+        else:
+            normalized = canonical.get(chosen_task.lower())
+            if normalized is None:
+                print(
+                    f'warning: Task "{chosen_task}" is not one of: '
+                    f'{", ".join(choices)}',
+                    file=sys.stderr,
+                )
+            else:
+                chosen_task = normalized
+
     if usage:
         print(
             f"\n[tokens: prompt={usage.get('prompt_tokens', '?')}, "
@@ -591,6 +665,7 @@ def main() -> None:
             ],
             "reasoning": printer.reasoning_text,
             "output": printer.answer_text,
+            "task": chosen_task,
             "reasoning_effort": args.reasoning_effort,
             "thinking": args.thinking,
             "usage": usage,

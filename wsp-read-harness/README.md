@@ -43,12 +43,20 @@ Useful options:
 --max-chars 400000   # truncate the weight text for smaller contexts
 --metadata           # also send the safetensors metadata (may give the answer away)
 --description-file descriptions/policy_4d_2a.txt  # neutral task/interface description
+--choices CartPole Flappy BallBeam Catch  # default candidates; override as needed
+--no-choices         # open-ended task instead
 --reasoning-effort high  # thinking effort (alias: --thinking-effort)
 --thinking disabled      # DeepSeek thinking-mode toggle
 --save run.json      # save the full input, reasoning and answer as JSON
 --max-tokens 2048
 --temperature 0
 ```
+
+The four tasks above are the default candidate set. `--choices` overrides it
+with another set (comma-separated values also work); `--no-choices` restores
+the open-ended question. When candidates are active, the prompt requires the
+final `Task:` line to name exactly one of them, and the harness warns if the
+answer names something else.
 
 For DeepSeek V4, `--reasoning-effort` is sent as the top-level
 `reasoning_effort` field (`low`, `high`, `max`; compatibility values such as
@@ -69,8 +77,9 @@ Either raise `--max-chars` to whatever the model supports, or use a harness
 that lets the model inspect tensors with tools.
 
 `--save` writes a JSON object containing the endpoint and model names, the
-checkpoint path, thinking settings, the full messages sent, the accumulated
-reasoning, the final answer, and token usage when the endpoint reports it.
+checkpoint path, thinking settings, the parsed `Task:` answer, the full
+messages sent, the accumulated reasoning, the final answer, and token usage
+when the endpoint reports it.
 
 ## Four-task blind comparison
 
@@ -86,3 +95,16 @@ Run the harness on each with the same prompt and options. Because the
 architecture and header are identical, the model must distinguish the tasks
 from the weight values alone. Do not pass `--metadata`, and do not include the
 `*_mapping.json` files in the prompt.
+
+For a four-way answer, the four candidates are included by default:
+
+```bash
+python wsp_read.py \
+  --base-url "$BASE_URL" \
+  --api-key "$DEEPSEEK_API_KEY" \
+  --model-name deepseek-flash \
+  --model ../anonymous/policy.safetensors \
+  --description-file descriptions/policy_4d_2a.txt \
+  --reasoning-effort max \
+  --save ../outputs/run.json
+```
