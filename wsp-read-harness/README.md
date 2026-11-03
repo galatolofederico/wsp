@@ -42,6 +42,7 @@ Useful options:
 ```bash
 --max-chars 400000   # truncate the weight text for smaller contexts
 --metadata           # also send the safetensors metadata (may give the answer away)
+--save run.json      # save the full input, reasoning and answer as JSON
 --max-tokens 2048
 --temperature 0
 ```
@@ -49,3 +50,7 @@ Useful options:
 For large checkpoints the full weight dump will not fit in a context window.
 Either raise `--max-chars` to whatever the model supports, or use a harness
 that lets the model inspect tensors with tools.
+
+`--save` writes a JSON object containing the endpoint and model names, the
+checkpoint path, the full messages sent, the accumulated reasoning, the final
+answer, and token usage when the endpoint reports it.

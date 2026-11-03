@@ -80,6 +80,12 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="also send the safetensors metadata (may reveal the answer)",
     )
+    p.add_argument(
+        "--save",
+        type=Path,
+        default=None,
+        help="write the full prompt, reasoning and answer to this JSON file",
+    )
     p.add_argument("--max-tokens", type=int, default=None)
     p.add_argument("--temperature", type=float, default=None)
     p.add_argument("--timeout", type=float, default=600.0)
@@ -264,6 +270,16 @@ class StreamPrinter:
         self._anything = False
         self._reasoning = False
         self._answer = False
+        self._reasoning_parts: list[str] = []
+        self._answer_parts: list[str] = []
+
+    @property
+    def reasoning_text(self) -> str:
+        return "".join(self._reasoning_parts)
+
+    @property
+    def answer_text(self) -> str:
+        return "".join(self._answer_parts)
 
     def _set_style(self, style: str) -> None:
         if not self.color or style == self._style:
@@ -302,6 +318,7 @@ class StreamPrinter:
             self._header("Reasoning")
             self._reasoning = True
         self._set_style(self.DIM)
+        self._reasoning_parts.append(text)
         self._write(text)
 
     def answer(self, text: str) -> None:
@@ -311,6 +328,7 @@ class StreamPrinter:
             self._header("Answer")
             self._answer = True
         self._set_style("")
+        self._answer_parts.append(text)
         self._write(text)
 
     def finish(self) -> None:
@@ -468,6 +486,8 @@ def main() -> None:
 
     if not args.model.is_file():
         raise SystemExit(f"No such file: {args.model}")
+    if args.save and args.save.resolve() == args.model.resolve():
+        raise SystemExit("--save must not point to the input model")
 
     print(f"Reading {args.model} ...", file=sys.stderr)
     summary, metadata_text, weights = build_checkpoint(
@@ -500,6 +520,29 @@ def main() -> None:
             f"completion={usage.get('completion_tokens', '?')}]",
             file=sys.stderr,
         )
+
+    if args.save:
+        record = {
+            "base_url": args.base_url,
+            "model": args.model_name,
+            "checkpoint": str(args.model),
+            "input": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
+            "reasoning": printer.reasoning_text,
+            "output": printer.answer_text,
+            "usage": usage,
+        }
+        try:
+            args.save.parent.mkdir(parents=True, exist_ok=True)
+            args.save.write_text(
+                json.dumps(record, indent=2, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
+        except OSError as exc:
+            raise SystemExit(f"Could not write {args.save}: {exc}")
+        print(f"Saved run to {args.save}", file=sys.stderr)
 
 
 if __name__ == "__main__":
