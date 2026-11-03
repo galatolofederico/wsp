@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Train a tiny PPO agent on CartPole and save the network as safetensors.
+"""Train a tiny PPO agent on CartPole or Flappy and save the network.
 
-Example:
-    python train.py                      # trains until solved (or 400k steps)
+Examples:
+    python train.py                      # trains CartPole until solved (or 400k steps)
     python train.py --timesteps 200000   # shorter budget
+    python train.py --env flappy         # second 4-D / 2-action task
 """
 
 from __future__ import annotations
@@ -18,13 +19,21 @@ from torch.nn.utils import clip_grad_norm_
 from torch.optim import Adam
 
 from cartpole import CartPoleVec
+from flappy import FlappyVec
 from model import ActorCritic, count_parameters, save_model
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
+ENVS = {
+    "cartpole": CartPoleVec,
+    "flappy": FlappyVec,
+}
+
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--env", choices=sorted(ENVS), default="cartpole",
+                   help="environment to train on (default: cartpole)")
     p.add_argument("--timesteps", type=int, default=400_000,
                    help="maximum environment steps (default: 400k)")
     p.add_argument("--n-envs", type=int, default=16)
@@ -52,9 +61,14 @@ def parse_args() -> argparse.Namespace:
 
 
 @torch.no_grad()
-def evaluate(model: ActorCritic, n_episodes: int, seed: int = 10_000) -> float:
+def evaluate(
+    model: ActorCritic,
+    n_episodes: int,
+    seed: int = 10_000,
+    env_cls=CartPoleVec,
+) -> float:
     """Mean return of the deterministic policy over ``n_episodes`` episodes."""
-    env = CartPoleVec(n_episodes, seed=seed)
+    env = env_cls(n_episodes, seed=seed)
     obs = env.reset()
     returns = np.zeros(n_episodes, dtype=np.float64)
     active = np.ones(n_episodes, dtype=bool)
@@ -80,9 +94,11 @@ def main() -> None:
     print(f"ActorCritic: {n_params:,} parameters "
           f"(obs {model.obs_dim} -> {' -> '.join(map(str, model.hidden))} -> "
           f"{model.n_actions} actions + value)")
+    print(f"Environment: {args.env}")
 
+    env_cls = ENVS[args.env]
     optimizer = Adam(model.parameters(), lr=args.lr, eps=1e-5)
-    env = CartPoleVec(args.n_envs, seed=args.seed)
+    env = env_cls(args.n_envs, seed=args.seed)
     obs = env.reset()
 
     n_steps = args.rollout_steps
@@ -194,11 +210,14 @@ def main() -> None:
             )
 
         if update >= args.eval_every and update % args.eval_every == 0:
-            eval_return = evaluate(model, args.eval_episodes)
+            eval_return = evaluate(
+                model, args.eval_episodes, env_cls=env_cls
+            )
             marker = ""
             if eval_return > best_eval:
                 best_eval = eval_return
                 save_model(model, args.out, {
+                    "format": f"{args.env}-ppo",
                     "eval_return": f"{eval_return:.1f}",
                     "timesteps": steps_done,
                     "parameters": count_parameters(model),
@@ -213,6 +232,7 @@ def main() -> None:
 
     if not saved:
         save_model(model, args.out, {
+            "format": f"{args.env}-ppo",
             "eval_return": "n/a",
             "timesteps": steps_done,
             "parameters": count_parameters(model),

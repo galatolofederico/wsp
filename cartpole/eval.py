@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Load a trained CartPole PPO policy and watch it balance the pole.
+"""Load a trained CartPole or Flappy PPO policy and watch it run.
 
 Examples:
     python eval.py                          # 5 episodes, 1x speed
     python eval.py --episodes 0             # run until you close the window
     python eval.py --episodes 20 --speed 2  # 20 episodes at 2x speed
     python eval.py --headless --episodes 50 # no window, just print returns
+    python eval.py --env flappy             # evaluate the Flappy checkpoint
 """
 
 from __future__ import annotations
@@ -17,13 +18,25 @@ from pathlib import Path
 import torch
 
 from cartpole import CartPoleEnv, CartPoleViewer
+from flappy import FlappyEnv, FlappyViewer
 from model import load_model
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
+ENVS = {
+    "cartpole": (
+        CartPoleEnv, CartPoleViewer, "fell over - resetting", "CartPole"
+    ),
+    "flappy": (
+        FlappyEnv, FlappyViewer, "crashed - resetting", "Flappy"
+    ),
+}
+
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--env", choices=sorted(ENVS), default="cartpole",
+                   help="environment to evaluate (default: cartpole)")
     p.add_argument("--model", type=Path,
                    default=SCRIPT_DIR / "cartpole_ppo.safetensors")
     p.add_argument("--episodes", type=int, default=5,
@@ -38,8 +51,8 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-def run_headless(model, args: argparse.Namespace) -> None:
-    env = CartPoleEnv(seed=args.seed)
+def run_headless(model, args: argparse.Namespace, env_cls) -> None:
+    env = env_cls(seed=args.seed)
     returns = []
     episodes = args.episodes or 10
     for episode in range(1, episodes + 1):
@@ -60,10 +73,17 @@ def run_headless(model, args: argparse.Namespace) -> None:
           f"(min {min(returns):.0f}, max {max(returns):.0f})")
 
 
-def run_viewer(model, args: argparse.Namespace) -> None:
-    env = CartPoleEnv(seed=args.seed)
-    viewer = CartPoleViewer(
-        title=f"CartPole - PPO ({args.model.name})"
+def run_viewer(
+    model,
+    args: argparse.Namespace,
+    env_cls,
+    viewer_cls,
+    terminated_msg: str,
+    display_name: str,
+) -> None:
+    env = env_cls(seed=args.seed)
+    viewer = viewer_cls(
+        title=f"{display_name} - PPO ({args.model.name})"
     )
     frame_ms = 20  # 50 Hz simulation, matching TAU = 0.02 s
     state = {
@@ -115,7 +135,7 @@ def run_viewer(model, args: argparse.Namespace) -> None:
                 if terminated or truncated:
                     state["phase"] = "reset"
                     state["last_status"] = (
-                        "fell over - resetting" if terminated
+                        terminated_msg if terminated
                         else "time limit - resetting"
                     )
                     state["returns"].append(state["episode_return"])
@@ -164,13 +184,16 @@ def main() -> None:
         )
 
     model = load_model(args.model)
+    env_cls, viewer_cls, terminated_msg, display_name = ENVS[args.env]
     label = "stochastic" if args.stochastic else "greedy"
-    print(f"Loaded {args.model} ({label} policy)")
+    print(f"Loaded {args.model} ({label} policy, env {args.env})")
 
     if args.headless:
-        run_headless(model, args)
+        run_headless(model, args, env_cls)
     else:
-        run_viewer(model, args)
+        run_viewer(
+            model, args, env_cls, viewer_cls, terminated_msg, display_name
+        )
 
 
 if __name__ == "__main__":
